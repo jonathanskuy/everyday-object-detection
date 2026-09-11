@@ -5,7 +5,7 @@ Usage:
 
     cfg = load_config()                  # default.yaml
     cfg = load_config("my_run.yaml")     # any other config file
-    cfg.train.epochs, cfg.data.detector_yaml, cfg.inference.conf
+    cfg.train.epochs, cfg.data.detector_yaml, cfg.inference.weights
 """
 
 from dataclasses import dataclass
@@ -28,7 +28,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # quietly change a value that another part of the run already used.
 @dataclass(frozen=True)
 class ModelConfig:
-    weights: str
+    weights: Path
 
 
 @dataclass(frozen=True)
@@ -47,6 +47,7 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class InferenceConfig:
+    weights: Path
     conf: float
 
 
@@ -69,18 +70,27 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
     A missing or misspelled key raises an error here, at load time, rather
     than surfacing later as a confusing failure halfway through training.
     Paths are not checked for existence: the single-class dataset does not
-    exist until the collapse step has run, and loading the config should not
-    depend on that.
+    exist until the collapse step has run, the pretrained checkpoint not
+    until Ultralytics first downloads it, and loading the config should not
+    depend on either.
     """
     with open(path, encoding="utf-8") as f:
         raw = yaml.safe_load(f)
 
+    # In `model` and `inference`, `weights` is the only path, so only that key
+    # is resolved; anything else (like `conf`) passes through unchanged.
+    model_section = dict(raw["model"])
+    model_section["weights"] = _resolve_path(model_section["weights"])
+
+    inference_section = dict(raw["inference"])
+    inference_section["weights"] = _resolve_path(inference_section["weights"])
+
     return Config(
         # `**section` passes each YAML key as a keyword argument, which is
         # what makes an unknown or missing key an immediate TypeError.
-        model=ModelConfig(**raw["model"]),
+        model=ModelConfig(**model_section),
         train=TrainConfig(**raw["train"]),
         # Every key in `data` is a path, so resolve them all the same way.
         data=DataConfig(**{key: _resolve_path(value) for key, value in raw["data"].items()}),
-        inference=InferenceConfig(**raw["inference"]),
+        inference=InferenceConfig(**inference_section),
     )

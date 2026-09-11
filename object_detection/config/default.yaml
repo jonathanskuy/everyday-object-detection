@@ -10,8 +10,12 @@
 model:
   # Pretrained checkpoint to fine-tune. The letter is the model size:
   # n(ano) < s(mall) < m(edium) < l(arge) < x(tra large) — bigger is more
-  # accurate but slower. Ultralytics downloads it on first use.
-  weights: yolo26n.pt
+  # accurate but slower. Resolved against the repo root like the paths
+  # below. If the file is missing, Ultralytics downloads it to this exact
+  # path, so the filename must be one of its official assets (yolo26n.pt,
+  # yolo26s.pt, ...). A bare name would instead be downloaded into the
+  # current working directory — notebooks/ when run from a notebook.
+  weights: weights/yolo26n.pt
 
 train:
   epochs: 100
@@ -28,4 +32,9 @@ data:
   detector_yaml: datasets/collapsed/data.yaml
 
 inference:
-  conf: 0.25   # minimum detection confidence; 0.25 is Ultralytics' default
+  # Trained detector used for inference (notebooks now, the API later).
+  # Point this at a new run's best.pt after retraining.
+  weights: runs/baseline/weights/best.pt
+  # Minimum detection confidence. 0.25 is Ultralytics' default — provisional
+  # until it can be chosen on a held-out test set.
+  conf: 0.25
