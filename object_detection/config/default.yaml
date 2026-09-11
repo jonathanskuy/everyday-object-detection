@@ -1,0 +1,31 @@
+# Project configuration. Loaded by object_detection/config/loader.py.
+#
+# Keys under `model`, `train` and `inference` deliberately use Ultralytics'
+# own argument names (imgsz, batch, conf, ...) so each value maps 1:1 onto
+# model.train(...) / model.predict(...) and can be looked up in their docs.
+#
+# Relative paths are resolved against the repository root, not the current
+# working directory, so the same config works from notebooks/ and scripts/.
+
+model:
+  # Pretrained checkpoint to fine-tune. The letter is the model size:
+  # n(ano) < s(mall) < m(edium) < l(arge) < x(tra large) — bigger is more
+  # accurate but slower. Ultralytics downloads it on first use.
+  weights: yolo26n.pt
+
+train:
+  epochs: 100
+  batch: 16
+  imgsz: 640   # training/inference image size in pixels (square)
+  seed: 42
+
+data:
+  # Original Roboflow export, all 8 object classes. Never modified — its
+  # per-class labels will seed the Stage 2 reference index.
+  source_yaml: datasets/raw_export/data.yaml
+  # Single-class copy the detector trains on (output of the collapse step).
+  # Does not exist until that step has run.
+  detector_yaml: datasets/collapsed/data.yaml
+
+inference:
+  conf: 0.25   # minimum detection confidence; 0.25 is Ultralytics' default

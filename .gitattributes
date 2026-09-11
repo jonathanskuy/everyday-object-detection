@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Strip notebook outputs when committing (the copy on disk keeps them).
+# The filter itself is defined per clone: run `nbstripout --install` once.
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb

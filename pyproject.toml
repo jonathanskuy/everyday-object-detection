@@ -1,0 +1,43 @@
+[build-system]
+# setuptools >= 64 is the first version supporting PEP 660 editable installs,
+# which is what `pip install -e .` uses with a pyproject-only project.
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "everyday-object-detection"
+version = "0.1.0"
+description = "Two-stage recognition of everyday objects: class-agnostic YOLO detection, then identification by vector retrieval."
+readme = "README.md"
+requires-python = ">=3.10"
+# Lower bounds only: this is a proof of concept, not a deployed service.
+# Install a CUDA build of torch *before* this (see README) — ultralytics
+# depends on torch, and pip's default torch wheel on Windows is CPU-only.
+dependencies = [
+    "ultralytics>=8.3",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",  # FastAPI needs it to parse file uploads
+    "pillow",
+    "opencv-python",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+# Notebook tooling isn't needed to run the package, so it's opt-in:
+#   pip install -e ".[dev]"
+dev = [
+    "jupyter",
+    "ipykernel",
+    "nbstripout",  # strips notebook outputs on commit; see README setup
+]
+
+[tool.setuptools.packages.find]
+# Declared explicitly: with several top-level folders (scripts/, notebooks/,
+# datasets/) setuptools' automatic discovery can refuse to guess, or pick up
+# folders that aren't packages.
+include = ["object_detection*"]
+
+[tool.setuptools.package-data]
+# YAML files aren't Python, so they must be listed to ship with the package.
+object_detection = ["config/*.yaml"]

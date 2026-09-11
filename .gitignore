@@ -1,0 +1,31 @@
+CLAUDE.md
+
+# --- Datasets ---------------------------------------------------------------
+# Leading "/" anchors to the repo root. Covers raw_export/ and collapsed/.
+/datasets/
+
+# --- Model weights and exports ----------------------------------------------
+# No leading "/", so these match at any depth: Ultralytics downloads
+# pretrained weights into the current working directory, which is
+# notebooks/ when training from a notebook.
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+
+# --- Ultralytics run outputs ------------------------------------------------
+# Also unanchored: train/predict write runs/ relative to the CWD too.
+runs/
+
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# --- Jupyter ----------------------------------------------------------------
+.ipynb_checkpoints/
