@@ -37,4 +37,4 @@ inference:
   weights: runs/baseline/weights/best.pt
   # Minimum detection confidence. 0.25 is Ultralytics' default — provisional
   # until it can be chosen on a held-out test set.
-  conf: 0.25
+  conf: 0.5
