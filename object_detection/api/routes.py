@@ -1,0 +1,78 @@
+"""HTTP endpoints of the API."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from PIL import Image, ImageOps
+
+from object_detection.api.schemas import DetectionResult, DetectResponse
+from object_detection.detection.inference import Detector
+
+# An APIRouter is a group of endpoints that app.py attaches to the app. It
+# keeps the endpoints separate from app setup (startup, model loading), so
+# each file does one job.
+router = APIRouter()
+
+
+def get_detector(request: Request) -> Detector:
+    """Return the Detector loaded at startup (see `lifespan` in app.py).
+
+    Used as a FastAPI dependency: an endpoint declares that it needs a
+    Detector, and FastAPI calls this function to supply one. The endpoint then
+    never has to know where the detector is stored.
+    """
+    return request.app.state.detector
+
+
+@router.post(
+    "/detect",
+    response_model=DetectResponse,
+    summary="Detect objects in an image",
+    description=(
+        "Upload one image; returns a box for every object found in it.\n\n"
+        "**Box format:** `bbox` is `[x1, y1, x2, y2]` in **absolute pixels** "
+        "(top-left and bottom-right corners, origin at the top-left of the image), "
+        "not normalised 0-1 values. Coordinates refer to the image after its EXIF "
+        "orientation is applied, which is the size given by `image_width` and `image_height`.\n\n"
+        "The detector is class-agnostic: it finds *where* objects are, not *which* object "
+        "each one is. `object_id`, `object_name` and `match_score` are reserved for the "
+        "identification stage and are currently always `null`."
+    ),
+)
+def detect(
+    file: Annotated[UploadFile, File(description="The image to analyse, e.g. a JPEG or PNG.")],
+    detector: Annotated[Detector, Depends(get_detector)],
+) -> DetectResponse:
+    # A plain `def`, not `async def`, on purpose. Detection is slow, blocking
+    # work. FastAPI runs a plain `def` endpoint in a separate worker thread, so
+    # while one image is being processed the server can still accept other
+    # requests. Inside `async def`, the same call would freeze the whole server
+    # until it finished. Sharing one model across threads is safe: Ultralytics
+    # serialises predictions with an internal lock.
+    try:
+        with Image.open(file.file) as uploaded:
+            # Phone photos are often stored sideways, with an EXIF tag telling
+            # viewers to rotate them. Given a PIL image, Ultralytics uses the
+            # pixels as stored and ignores that tag (it only honours it when
+            # reading a file path itself). Without this, the boxes and image
+            # size would describe the sideways version, not the photo the user
+            # sees. exif_transpose applies the rotation, and returns a plain
+            # copy if there is nothing to rotate.
+            image = ImageOps.exif_transpose(uploaded).convert("RGB")
+    except OSError:
+        # Pillow raises OSError (or its subclass UnidentifiedImageError) for
+        # files that aren't images or are corrupt/truncated. That is the
+        # client's mistake, so answer 400 Bad Request instead of crashing
+        # with a 500 Internal Server Error.
+        raise HTTPException(status_code=400, detail="The uploaded file is not a readable image.")
+
+    detections = sorted(detector.predict(image), key=lambda detection: detection.confidence, reverse=True)
+
+    return DetectResponse(
+        detections=[
+            DetectionResult(bbox=list(detection.bbox), confidence=detection.confidence)
+            for detection in detections
+        ],
+        image_width=image.width,
+        image_height=image.height,
+    )
