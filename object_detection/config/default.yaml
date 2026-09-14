@@ -32,9 +32,12 @@ data:
   detector_yaml: datasets/collapsed/data.yaml
 
 inference:
-  # Trained detector used for inference (notebooks now, the API later).
+  # Trained detector used for inference (notebooks and the API).
   # Point this at a new run's best.pt after retraining.
   weights: runs/baseline/weights/best.pt
-  # Minimum detection confidence. 0.25 is Ultralytics' default — provisional
-  # until it can be chosen on a held-out test set.
+  # Minimum detection confidence (Ultralytics' default is 0.25). Chosen in
+  # notebooks/02_evaluation.ipynb on the validation set, leaning towards
+  # recall: Stage 2 can reject a false box, but never recover a missed
+  # object. Re-check on a test split once one exists. The API reads this at
+  # startup, so restart the server after changing it.
   conf: 0.5
