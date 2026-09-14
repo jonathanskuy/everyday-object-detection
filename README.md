@@ -67,6 +67,7 @@ object_detection/        the installable package (all application code)
 └── utils/               shared helpers (drawing detections)
 scripts/                 standalone command-line tools
 notebooks/               data preparation, training and evaluation; import from object_detection
+tests/                   automated tests (pytest)
 ```
 
 Created locally and not committed: `datasets/` (the Roboflow export and its
@@ -123,6 +124,20 @@ Requires Python 3.10+. Commands are run from the repository root.
    This strips cell outputs from notebooks as they are committed, keeping
    diffs readable and images out of git history. Your local copy keeps its
    outputs.
+
+## Running the tests
+
+```bash
+pytest
+```
+
+The tests cover the config loader, the conversion of Ultralytics' output into
+`Detection` objects, the evaluation helpers (IoU, label loading, matching),
+the arguments `train()` passes to Ultralytics, drawing, and the `/detect`
+endpoint (response shape, EXIF rotation, error codes). They use fake models
+and images generated on the fly, so they run in seconds and never train
+anything. One test runs the real detector on a validation image; it is
+skipped automatically on machines without the trained weights and dataset.
 
 ## Checking a dataset
 

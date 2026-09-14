@@ -24,12 +24,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Notebook tooling isn't needed to run the package, so it's opt-in:
+# Notebook and test tooling isn't needed to run the package, so it's opt-in:
 #   pip install -e ".[dev]"
 dev = [
     "jupyter",
     "ipykernel",
     "nbstripout",  # strips notebook outputs on commit; see README setup
+    "pytest",
+    "httpx",  # FastAPI's TestClient needs it to send requests to the app
 ]
 
 [tool.setuptools.packages.find]
@@ -41,3 +43,7 @@ include = ["object_detection*"]
 [tool.setuptools.package-data]
 # YAML files aren't Python, so they must be listed to ship with the package.
 object_detection = ["config/*.yaml"]
+
+[tool.pytest.ini_options]
+# Only look for tests here, so pytest doesn't wander into datasets/ or runs/.
+testpaths = ["tests"]
