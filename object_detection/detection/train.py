@@ -20,7 +20,7 @@ def train(cfg: Config):
 
     Weights, plots and results.csv are written to runs/baseline/. Ultralytics
     never overwrites an existing run folder: if runs/baseline/ already exists,
-    it writes to runs/baseline2/, runs/baseline3/, ... instead, and
+    it writes to runs/baseline-2/, runs/baseline-3/, ... instead, and
     `inference.weights` in the config has to be pointed at the new one.
     """
     model = YOLO(cfg.model.weights)
@@ -32,6 +32,6 @@ def train(cfg: Config):
         seed=cfg.train.seed,
         project=str(PROJECT_ROOT / "runs"),
         # Hardcoded, as it was in the notebook. A candidate for the YAML
-        # config, since every retrain currently produces a "baseline<N>".
+        # config, since every retrain currently produces a "baseline-<N>".
         name="baseline",
     )

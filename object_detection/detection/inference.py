@@ -7,7 +7,7 @@ Usage:
     cfg = load_config()
     detector = Detector(cfg.inference.weights, cfg.inference.conf)
     for detection in detector.predict("photo.jpg"):
-        print(detection.bbox, detection.confidence)
+        print(f"{detection.bbox} {detection.confidence:.3f}")
 
 This module is the boundary between Ultralytics and the rest of the project:
 Ultralytics' Results objects stay inside it, and everything downstream
