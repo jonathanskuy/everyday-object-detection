@@ -37,6 +37,7 @@ class TrainConfig:
     batch: int
     imgsz: int
     seed: int
+    name: str
 
 
 @dataclass(frozen=True)

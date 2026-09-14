@@ -165,8 +165,11 @@ The notebooks run in order, and each builds on the previous one:
 3. **`02_evaluation`**: measures the trained detector and chooses the
    confidence threshold.
 
-Outputs go to `runs/`. After retraining, point `inference.weights` in the
-config at the new run's `best.pt`.
+Outputs go to `runs/<name>/`, where the name is `train.name` in the config.
+Before retraining, give the experiment a new `train.name` (Ultralytics never
+overwrites a run; reusing a name produces `<name>-2`). Afterwards, point
+`inference.weights` at the new run's `best.pt`, and re-run `02_evaluation`,
+which names its output `<name>-val` after the run it evaluates.
 
 ## Results
 

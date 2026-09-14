@@ -22,6 +22,11 @@ train:
   batch: 16
   imgsz: 640   # training/inference image size in pixels (square)
   seed: 42
+  # Name of the run folder, written to runs/<name>/. Ultralytics never
+  # overwrites a run: if runs/<name>/ already exists, it writes to
+  # runs/<name>-2/ instead. Give each experiment its own name (e.g.
+  # "more-overlap-data"), then point inference.weights at its best.pt.
+  name: baseline
 
 data:
   # Original Roboflow export, all 8 object classes. Never modified — its
