@@ -21,6 +21,11 @@ dependencies = [
     "pillow",
     "opencv-python",
     "pyyaml",
+    # Stage 2 (identification). All three embedding routes are installed for
+    # now so they can be compared; once one is chosen, the others can go.
+    "qdrant-client",  # vector index: local mode, a Qdrant server, or Qdrant Cloud
+    "fastembed",      # Qdrant's embedding library (ONNX models)
+    "transformers",   # DINOv2
 ]
 
 [project.optional-dependencies]

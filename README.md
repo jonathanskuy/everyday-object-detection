@@ -5,8 +5,7 @@ phones, watches, ...) in images. It finds where each object is, then works
 out which object it is.
 
 **Status:** Stage 1 (detection) is complete: the detector is trained,
-evaluated, and served through an HTTP API. Stage 2 (identification) has not
-started.
+evaluated, and served through an HTTP API. Stage 2 (identification) has been scaffolded.
 
 ## How it works
 

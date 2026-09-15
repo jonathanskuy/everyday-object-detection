@@ -12,9 +12,9 @@ Reference crops (used to build the index) and query crops (from the detector
 at runtime) MUST both come from this module with the same settings.
 Otherwise their vectors aren't comparable, and matching degrades without any
 error.
-
-Status: scaffold only. Nothing is implemented yet.
 """
+
+import math
 
 from PIL import Image
 
@@ -44,7 +44,7 @@ def crop_detection(
 
     Steps, in order:
         1. Expand the box by `padding` on each side.
-        2. Round to whole pixels and clamp to the image edges.
+        2. Round outward to whole pixels and clamp to the image edges.
         3. Return None if the result is smaller than `min_size`.
         4. Cut the region out of the image.
         5. Pad it to a square with PAD_COLOUR, keeping the object centred.
@@ -53,6 +53,39 @@ def crop_detection(
            means an embedding model's own centre-crop can't cut off the ends
            of long objects.
 
-    The returned image has any size; the embedder resizes it for its model.
+    The returned image is RGB and has any size; the embedder resizes it for
+    its model. The input image is never modified.
     """
-    raise NotImplementedError
+    x1, y1, x2, y2 = bbox
+
+    # 1. Padding is relative to the box, so a small object and a large one
+    # get the same proportion of surrounding context.
+    pad_x = (x2 - x1) * padding
+    pad_y = (y2 - y1) * padding
+
+    # 2. Round outward (floor the left/top edge, ceil the right/bottom edge):
+    # a pixel the box only partly covers is kept rather than cut off. Then
+    # clamp, since padding (or a box at the border) can reach past the image.
+    left = max(0, math.floor(x1 - pad_x))
+    top = max(0, math.floor(y1 - pad_y))
+    right = min(image.width, math.ceil(x2 + pad_x))
+    bottom = min(image.height, math.ceil(y2 + pad_y))
+
+    # 3. Also catches boxes entirely outside the image, where clamping makes
+    # right <= left and the width zero or negative.
+    width = right - left
+    height = bottom - top
+    if width < min_size or height < min_size:
+        return None
+
+    # 4. crop() returns a new image; converting to RGB means every crop has
+    # the same colour format whatever the source image was (greyscale, RGBA).
+    region = image.crop((left, top, right, bottom)).convert("RGB")
+
+    # 5. A square as large as the longer side, filled with grey, with the
+    # region pasted in the middle. `//` is integer division: when the
+    # leftover space is odd, the extra pixel of grey goes on the right/bottom.
+    side = max(width, height)
+    square = Image.new("RGB", (side, side), PAD_COLOUR)
+    square.paste(region, ((side - width) // 2, (side - height) // 2))
+    return square
