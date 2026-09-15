@@ -62,7 +62,7 @@ is `image_width` x `image_height`.
 object_detection/        the installable package (all application code)
 ├── api/                 FastAPI app: endpoint, response schemas, model loading
 ├── detection/           Stage 1: YOLO training and inference
-├── identification/      Stage 2: embedding + retrieval (not started)
+├── identification/      Stage 2: embedding + retrieval (scaffold)
 ├── config/              YAML config (default.yaml) and its loader
 └── utils/               shared helpers (drawing detections)
 scripts/                 standalone command-line tools
