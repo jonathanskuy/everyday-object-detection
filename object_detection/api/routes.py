@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from PIL import Image, ImageOps
 
 from object_detection.api.schemas import DetectionResult, DetectResponse
+from object_detection.config.loader import IdentificationConfig
 from object_detection.detection.inference import Detector
+from object_detection.identification.identify import identify
+from object_detection.identification.index import ReferenceIndex
 
 # An APIRouter is a group of endpoints that app.py attaches to the app. It
 # keeps the endpoints separate from app setup (startup, model loading), so
@@ -24,6 +27,20 @@ def get_detector(request: Request) -> Detector:
     return request.app.state.detector
 
 
+def get_index(request: Request) -> ReferenceIndex:
+    """Return the reference index opened at startup (see `lifespan` in app.py)."""
+    return request.app.state.index
+
+
+def get_identification_config(request: Request) -> IdentificationConfig:
+    """Return the identification settings read from the config at startup.
+
+    Supplied as a dependency rather than read inside the endpoint, so the
+    endpoint has no idea where settings come from and tests can replace them.
+    """
+    return request.app.state.identification
+
+
 @router.post(
     "/detect",
     response_model=DetectResponse,
@@ -34,14 +51,18 @@ def get_detector(request: Request) -> Detector:
         "(top-left and bottom-right corners, origin at the top-left of the image), "
         "not normalised 0-1 values. Coordinates refer to the image after its EXIF "
         "orientation is applied, which is the size given by `image_width` and `image_height`.\n\n"
-        "The detector is class-agnostic: it finds *where* objects are, not *which* object "
-        "each one is. `object_id`, `object_name` and `match_score` are reserved for the "
-        "identification stage and are currently always `null`."
+        "**Counting:** the number of entries in `detections` is the number of products found "
+        "in the image. Every detection is returned, including ones that could not be identified.\n\n"
+        "**Identification:** each detection's crop is matched against the reference index. "
+        "`object_id`, `object_name` and `match_score` describe that match, and are `null` "
+        "when no reference was similar enough, i.e. the object is not in the index."
     ),
 )
 def detect(
     file: Annotated[UploadFile, File(description="The image to analyse, e.g. a JPEG or PNG.")],
     detector: Annotated[Detector, Depends(get_detector)],
+    index: Annotated[ReferenceIndex, Depends(get_index)],
+    identification: Annotated[IdentificationConfig, Depends(get_identification_config)],
 ) -> DetectResponse:
     # A plain `def`, not `async def`, on purpose. Detection is slow, blocking
     # work. FastAPI runs a plain `def` endpoint in a separate worker thread, so
@@ -68,10 +89,29 @@ def detect(
 
     detections = sorted(detector.predict(image), key=lambda detection: detection.confidence, reverse=True)
 
+    # Stage 2: crop each detection, match it against the reference index, and
+    # keep only matches the threshold accepts. Every detection comes back,
+    # identified or not: the number of detections is the number of products
+    # found, and identification never adds or removes one.
+    identifications = identify(
+        image,
+        detections,
+        index,
+        padding=identification.crop_padding,
+        min_size=identification.min_crop_size,
+        unknown_threshold=identification.unknown_threshold,
+    )
+
     return DetectResponse(
         detections=[
-            DetectionResult(bbox=list(detection.bbox), confidence=detection.confidence)
-            for detection in detections
+            DetectionResult(
+                bbox=list(result.detection.bbox),
+                confidence=result.detection.confidence,
+                object_id=result.object_id,
+                object_name=result.object_name,
+                match_score=result.match_score,
+            )
+            for result in identifications
         ],
         image_width=image.width,
         image_height=image.height,

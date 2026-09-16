@@ -6,14 +6,17 @@ quickly and without weights or a GPU.
 """
 
 import io
+from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from object_detection.api.app import app
-from object_detection.api.routes import get_detector
+from object_detection.api.routes import get_detector, get_identification_config, get_index
+from object_detection.config.loader import load_config
 from object_detection.detection.inference import Detection
+from object_detection.identification.index import Match, ReferenceIndex
 
 
 class FakeDetector:
@@ -28,16 +31,46 @@ class FakeDetector:
         return self.detections
 
 
+class FakeIndex(ReferenceIndex):
+    """Returns the same match for every crop, or nothing when `match` is None."""
+
+    def __init__(self, match=None):
+        self.match = match
+        self.searched_crops = []
+
+    def search(self, crops, limit):
+        self.searched_crops.extend(crops)
+        return [[self.match] if self.match else [] for _ in crops]
+
+    def add_references(self, crops, object_id, object_name):
+        raise AssertionError("the API must not write to the index")
+
+    def remove_object(self, object_id):
+        raise AssertionError("the API must not write to the index")
+
+
+def override(detector=None, index=None, identification=None):
+    """Replace the endpoint's dependencies with test doubles.
+
+    dependency_overrides is FastAPI's way to swap a dependency in tests:
+    wherever the endpoint asks for get_detector, it gets the fake instead.
+    """
+    if detector is not None:
+        app.dependency_overrides[get_detector] = lambda: detector
+    if index is not None:
+        app.dependency_overrides[get_index] = lambda: index
+    app.dependency_overrides[get_identification_config] = lambda: identification or load_config().identification
+
+
 @pytest.fixture
 def fake_detector():
     # Deliberately NOT sorted by confidence, to test that the API sorts.
+    # The boxes are large enough to survive min_crop_size.
     detector = FakeDetector([
-        Detection(bbox=(1.0, 2.0, 3.0, 4.0), confidence=0.4),
-        Detection(bbox=(10.0, 20.0, 30.0, 40.0), confidence=0.9),
+        Detection(bbox=(10.0, 10.0, 60.0, 60.0), confidence=0.4),
+        Detection(bbox=(100.0, 20.0, 180.0, 90.0), confidence=0.9),
     ])
-    # dependency_overrides is FastAPI's way to swap a dependency in tests:
-    # wherever an endpoint asks for get_detector, it gets the fake instead.
-    app.dependency_overrides[get_detector] = lambda: detector
+    override(detector=detector, index=FakeIndex())
     yield detector
     app.dependency_overrides.clear()
 
@@ -74,7 +107,7 @@ def test_response_has_the_agreed_shape(client, fake_detector):
     assert set(body) == {"detections", "image_width", "image_height"}
     for detection in body["detections"]:
         assert set(detection) == {"bbox", "confidence", "object_id", "object_name", "match_score"}
-        # Reserved for Stage 2: present, and null.
+        # This fake index finds nothing, so every item is unidentified.
         assert detection["object_id"] is None
         assert detection["object_name"] is None
         assert detection["match_score"] is None
@@ -83,7 +116,34 @@ def test_response_has_the_agreed_shape(client, fake_detector):
 def test_detections_are_returned_highest_confidence_first(client, fake_detector):
     body = post_image(client, jpeg_bytes((200, 100))).json()
     assert [d["confidence"] for d in body["detections"]] == [0.9, 0.4]
-    assert body["detections"][0]["bbox"] == [10.0, 20.0, 30.0, 40.0]
+    assert body["detections"][0]["bbox"] == [100.0, 20.0, 180.0, 90.0]
+
+
+def test_a_confident_match_fills_in_the_identification_fields(client):
+    override(detector=FakeDetector([Detection(bbox=(10.0, 10.0, 60.0, 60.0), confidence=0.9)]),
+             index=FakeIndex(Match("watch", "watch", 0.84)))
+    try:
+        detection, = post_image(client, jpeg_bytes((200, 200))).json()["detections"]
+    finally:
+        app.dependency_overrides.clear()
+
+    assert detection["object_id"] == "watch"
+    assert detection["object_name"] == "watch"
+    assert detection["match_score"] == pytest.approx(0.84)
+
+
+def test_a_weak_match_is_returned_as_an_unidentified_detection(client):
+    config = replace(load_config().identification, unknown_threshold=0.9)
+    override(detector=FakeDetector([Detection(bbox=(10.0, 10.0, 60.0, 60.0), confidence=0.9)]),
+             index=FakeIndex(Match("watch", "watch", 0.5)), identification=config)
+    try:
+        body = post_image(client, jpeg_bytes((200, 200))).json()
+    finally:
+        app.dependency_overrides.clear()
+
+    # The item is still detected and still counted, just not identified.
+    assert len(body["detections"]) == 1
+    assert body["detections"][0]["object_id"] is None
 
 
 def test_image_size_is_reported(client, fake_detector):
@@ -100,7 +160,7 @@ def test_exif_rotated_photo_is_turned_upright_before_detection(client, fake_dete
 
 
 def test_no_detections_gives_an_empty_list(client):
-    app.dependency_overrides[get_detector] = lambda: FakeDetector([])
+    override(detector=FakeDetector([]), index=FakeIndex())
     try:
         body = post_image(client, jpeg_bytes((200, 100))).json()
     finally:

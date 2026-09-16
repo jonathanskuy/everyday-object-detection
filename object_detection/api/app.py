@@ -15,6 +15,7 @@ from PIL import Image
 from object_detection.api.routes import router
 from object_detection.config.loader import load_config
 from object_detection.detection.inference import Detector
+from object_detection.identification.index import create_index
 
 
 @asynccontextmanager
@@ -35,18 +36,31 @@ async def lifespan(app: FastAPI):
     # time. The image size doesn't matter: every input is resized for the model.
     detector.predict(Image.new("RGB", (640, 640)))
 
+    # The reference index, loaded once for the same reason as the detector.
+    # With Qdrant in local mode this LOCKS its folder for as long as the
+    # server runs, so build_reference_index.py cannot run at the same time.
+    # That is the point at which Qdrant moves to a server (see the config).
+    index = create_index(cfg.identification)
+
     # app.state is FastAPI's place for objects shared across all requests.
     app.state.detector = detector
-    yield
-    # Nothing to clean up at shutdown: the model is freed with the process.
+    app.state.index = index
+    app.state.identification = cfg.identification
+    try:
+        yield
+    finally:
+        # Releases the local-mode lock, so the index can be rebuilt once the
+        # server stops. The model is freed with the process.
+        index.close()
 
 
 app = FastAPI(
     title="Everyday Object Detection",
     description=(
-        "Stage 1 of a two-stage recognition system: a class-agnostic YOLO detector finds "
-        "where objects are in an image. Stage 2 (identification by vector retrieval) is "
-        "not implemented yet, so identification fields in responses are null."
+        "Two-stage recognition: a class-agnostic YOLO detector finds where objects are, "
+        "then each detection's crop is embedded and matched against a reference index to "
+        "decide which object it is. Items whose best match is too weak are returned as "
+        "detections with null identification fields."
     ),
     lifespan=lifespan,
 )

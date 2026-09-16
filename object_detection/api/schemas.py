@@ -34,20 +34,30 @@ class DetectionResult(BaseModel):
         description="Detector confidence that this box contains an object, from 0 to 1.",
         examples=[0.91],
     )
-    # Reserved for Stage 2 (identification). Always null for now: returning
-    # them already means clients are written against the final shape, and
-    # Stage 2 only changes their values, never the structure.
+    # Filled in by identification. All three are null together when the item
+    # could not be identified; the detection itself is still returned, and
+    # still counts towards the number of products found.
     object_id: str | None = Field(
         default=None,
-        description="Identifier of the matched reference object. Reserved for Stage 2; currently always null.",
+        description=(
+            "Identifier of the matched reference object, or null if no reference was "
+            "similar enough (the object is not in the index)."
+        ),
+        examples=["watch"],
     )
     object_name: str | None = Field(
         default=None,
-        description="Name of the matched reference object. Reserved for Stage 2; currently always null.",
+        description="Name of the matched reference object, or null if it could not be identified.",
+        examples=["watch"],
     )
     match_score: float | None = Field(
         default=None,
-        description="Similarity score of the identification match. Reserved for Stage 2; currently always null.",
+        description=(
+            "Similarity between this crop and the matched reference, from 0 to 1, or null "
+            "if it could not be identified. Not comparable with `confidence`, which is the "
+            "detector's certainty that there is an object here at all."
+        ),
+        examples=[0.84],
     )
 
 

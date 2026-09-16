@@ -4,8 +4,9 @@ Proof-of-concept system that recognises everyday objects (bags, glasses,
 phones, watches, ...) in images. It finds where each object is, then works
 out which object it is.
 
-**Status:** Stage 1 (detection) is complete: the detector is trained,
-evaluated, and served through an HTTP API. Stage 2 (identification) has been scaffolded.
+**Status:** both stages work end to end. The detector is trained and
+evaluated, reference objects are indexed in Qdrant, and the HTTP API returns
+detected objects with their identification.
 
 ## How it works
 
@@ -31,8 +32,10 @@ vectors to the index, with no retraining and no redeploy.
 
 ### Response format
 
-Each detection carries identity fields that Stage 1 leaves as `null`. Stage 2
-fills them in without changing the shape of the response.
+The number of entries in `detections` is the number of products found in the
+image. Every detection is returned, whether or not it could be identified:
+`object_id`, `object_name` and `match_score` describe the match, and are
+`null` when no reference object was similar enough.
 
 Bounding boxes are `[x1, y1, x2, y2]`: the top-left and bottom-right corners
 in **absolute pixels**, not normalised 0-1 values. They refer to the image as
@@ -213,6 +216,24 @@ numbers are optimistic, and the validation set is small.
 - **Unusual poses**, such as a bag leaning against a wall, get low confidence.
 - **Labelling consistency** needs a rule, e.g. whether straps belong inside
   the box, and whether everyday objects outside the 8 types are labelled too.
+
+## Building the reference index
+
+Identification matches each detected crop against a reference index. Build it
+from the original per-class export, whose labels already carry object names:
+
+```bash
+python scripts/build_reference_index.py           # index the train split
+python scripts/build_reference_index.py --reset   # replace what is stored
+```
+
+Only the train split is indexed, so the validation split's crops can measure
+identification accuracy on objects the index has not seen. The embedding
+model is downloaded on first use.
+
+The index lives where `identification.qdrant_location` points. A folder means
+Qdrant's local mode, which **one process at a time** can open: stop the API
+before rebuilding the index, or move Qdrant to a server (see the config).
 
 ## Running the API
 
