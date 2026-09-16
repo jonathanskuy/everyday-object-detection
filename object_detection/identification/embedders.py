@@ -20,6 +20,8 @@ from abc import ABC, abstractmethod
 from fastembed import ImageEmbedding
 from PIL import Image
 
+from object_detection.config.loader import IdentificationConfig
+
 
 class Embedder(ABC):
     """Turns crops into fixed-length vectors describing what they look like.
@@ -129,3 +131,17 @@ class DinoV2Embedder(Embedder):
 
     def embed(self, crops: list[Image.Image]) -> list[list[float]]:
         raise NotImplementedError
+
+
+def create_embedder(config: IdentificationConfig) -> Embedder:
+    """Build the embedder named in the config.
+
+    Keeping this in one place means every caller (the index-building script,
+    the API, notebooks) picks its model the same way: by changing the config,
+    never by importing a specific class.
+    """
+    if config.embedder == "fastembed":
+        return FastEmbedEmbedder(config.model)
+    if config.embedder == "dinov2":
+        raise NotImplementedError("The DINOv2 embedder is not implemented yet.")
+    raise ValueError(f"Unknown embedder {config.embedder!r}: expected 'fastembed' or 'dinov2'.")

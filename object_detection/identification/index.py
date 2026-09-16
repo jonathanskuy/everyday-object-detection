@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from PIL import Image
 from qdrant_client import QdrantClient, models
 
-from object_detection.identification.embedders import Embedder
+from object_detection.config.loader import IdentificationConfig
+from object_detection.identification.embedders import Embedder, create_embedder
 
 # Payload keys. EMBEDDER_KEY records which model produced a vector: vectors
 # from different models are not comparable, and a mismatch would otherwise
@@ -220,3 +221,18 @@ class CloudInferenceIndex(ReferenceIndex):
 
     def remove_object(self, object_id: str) -> None:
         raise NotImplementedError
+
+
+def create_index(config: IdentificationConfig) -> ReferenceIndex:
+    """Build the index described by the config.
+
+    Callers get a ReferenceIndex and never choose an implementation
+    themselves, so switching between FastEmbed, DINOv2 and (later) Qdrant
+    Cloud Inference is a config change. Remember to close() it when done:
+    local mode locks its folder.
+    """
+    return LocalEmbeddingIndex(
+        embedder=create_embedder(config),
+        location=config.qdrant_location,
+        collection_name=config.collection,
+    )
