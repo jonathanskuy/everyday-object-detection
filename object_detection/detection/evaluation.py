@@ -12,7 +12,7 @@ a package module can't see. load_true_boxes now uses YOLO's folder convention
 instead (see its docstring), which gives the same paths for the dataset.
 """
 
-from PIL import Image
+from object_detection.utils.labels import load_labelled_boxes
 
 # A prediction counts as finding a labelled object when their IoU is at least
 # this. 0.5 is part of the definition of the metric (the "50" in mAP50), not a
@@ -27,27 +27,12 @@ def load_true_boxes(img_path):
     uses: an image at <split>/images/<name>.<ext> has its labels at
     <split>/labels/<name>.txt. A missing or empty label file means a
     background image, and returns an empty list.
+
+    The detector is class-agnostic, so the class of each label is dropped
+    here; utils.labels does the reading and the conversion to absolute pixels.
     """
 
-    label_path = img_path.parent.parent / "labels" / f"{img_path.stem}.txt"
-    if not label_path.exists():
-        return []
-
-    with Image.open(img_path) as image:
-        img_width, img_height = image.size
-
-    true_boxes = []
-    for line in label_path.read_text().splitlines():
-        if not line.strip():
-            continue
-        _, x_center, y_center, width, height = map(float, line.split())
-        x1 = (x_center - width / 2) * img_width
-        y1 = (y_center - height / 2) * img_height
-        x2 = (x_center + width / 2) * img_width
-        y2 = (y_center + height / 2) * img_height
-        true_boxes.append((x1, y1, x2, y2))
-
-    return true_boxes
+    return [box for _, box in load_labelled_boxes(img_path)]
 
 
 def iou(box_a, box_b):
