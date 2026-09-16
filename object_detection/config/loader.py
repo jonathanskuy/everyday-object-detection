@@ -53,16 +53,42 @@ class InferenceConfig:
 
 
 @dataclass(frozen=True)
+class IdentificationConfig:
+    crop_padding: float
+    min_crop_size: int
+    embedder: str
+    model: str
+    # A folder for Qdrant's local mode, or a server URL. Kept as a string
+    # because it can be either; see _resolve_location.
+    qdrant_location: str
+    collection: str
+    unknown_threshold: float
+
+
+@dataclass(frozen=True)
 class Config:
     model: ModelConfig
     train: TrainConfig
     data: DataConfig
     inference: InferenceConfig
+    identification: IdentificationConfig
 
 
 def _resolve_path(value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def _resolve_location(value: str) -> str:
+    """Resolve a Qdrant location: a URL stays as it is, a folder becomes absolute.
+
+    The same setting names both a server ("http://localhost:6333") and a
+    local-mode folder. Folders are resolved against the repo root like every
+    other path, so a notebook and the API use the same database.
+    """
+    if value.startswith(("http://", "https://")):
+        return value
+    return str(_resolve_path(value))
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
@@ -86,6 +112,9 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
     inference_section = dict(raw["inference"])
     inference_section["weights"] = _resolve_path(inference_section["weights"])
 
+    identification_section = dict(raw["identification"])
+    identification_section["qdrant_location"] = _resolve_location(identification_section["qdrant_location"])
+
     return Config(
         # `**section` passes each YAML key as a keyword argument, which is
         # what makes an unknown or missing key an immediate TypeError.
@@ -94,4 +123,5 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> Config:
         # Every key in `data` is a path, so resolve them all the same way.
         data=DataConfig(**{key: _resolve_path(value) for key, value in raw["data"].items()}),
         inference=InferenceConfig(**inference_section),
+        identification=IdentificationConfig(**identification_section),
     )

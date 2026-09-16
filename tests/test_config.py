@@ -43,6 +43,25 @@ def test_misspelled_key_fails_at_load_time(tmp_path):
         load_config(path)
 
 
+def test_identification_settings_load():
+    cfg = load_config()
+    assert cfg.identification.crop_padding >= 0
+    assert cfg.identification.min_crop_size > 0
+    assert cfg.identification.embedder in {"fastembed", "dinov2"}
+    assert 0 <= cfg.identification.unknown_threshold <= 1
+
+
+def test_a_qdrant_folder_is_resolved_but_a_url_is_left_alone(tmp_path):
+    cfg = load_config()
+    # The default is a folder, so it must end up absolute like other paths.
+    assert Path(cfg.identification.qdrant_location).is_absolute()
+
+    path = write_modified_config(
+        tmp_path, lambda raw: raw["identification"].update(qdrant_location="http://localhost:6333")
+    )
+    assert load_config(path).identification.qdrant_location == "http://localhost:6333"
+
+
 def test_config_values_cannot_be_changed_after_loading():
     cfg = load_config()
     with pytest.raises(AttributeError):

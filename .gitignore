@@ -18,6 +18,11 @@ CLAUDE.md
 # Also unanchored: train/predict write runs/ relative to the CWD too.
 runs/
 
+# --- Stage 2 vector index ---------------------------------------------------
+# Qdrant's local-mode database (identification.qdrant_location). Rebuildable
+# from the reference images, and binary, so it is not committed.
+/qdrant_data/
+
 # --- Python -----------------------------------------------------------------
 __pycache__/
 *.py[cod]

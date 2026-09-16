@@ -12,12 +12,12 @@ vector itself. It is handled by CloudInferenceIndex in index.py instead.
 Planned comparison (FastEmbed vs Qdrant Cloud Inference vs DINOv2): these
 classes, together with index.py, are what makes it a matter of configuration.
 
-Status: scaffold only. Nothing is implemented yet, and the libraries the
-implementations will need (fastembed, transformers) are not dependencies yet.
+Status: FastEmbedEmbedder is implemented; DinoV2Embedder is still a stub.
 """
 
 from abc import ABC, abstractmethod
 
+from fastembed import ImageEmbedding
 from PIL import Image
 
 
@@ -71,19 +71,31 @@ class FastEmbedEmbedder(Embedder):
     """
 
     def __init__(self, model_name: str):
-        """Load the FastEmbed model `model_name` (downloaded on first use)."""
-        raise NotImplementedError
+        """Load the FastEmbed model `model_name` (downloaded and cached on first use)."""
+        self._model_name = model_name
+        self._model = ImageEmbedding(model_name=model_name)
+        # FastEmbed publishes each model's vector length; reading it here
+        # means the collection's vector size always matches the model, with
+        # no number to keep in sync by hand.
+        self._dimension = next(
+            entry["dim"] for entry in ImageEmbedding.list_supported_models() if entry["model"] == model_name
+        )
 
     @property
     def name(self) -> str:
-        raise NotImplementedError
+        return self._model_name
 
     @property
     def dimension(self) -> int:
-        raise NotImplementedError
+        return self._dimension
 
     def embed(self, crops: list[Image.Image]) -> list[list[float]]:
-        raise NotImplementedError
+        # FastEmbed accepts PIL images directly and does the model's own
+        # resizing and normalisation internally, which is why cropping.py
+        # leaves the crops at their natural size.
+        # It returns a generator of NumPy arrays; .tolist() turns each into
+        # the plain list of floats that Qdrant expects.
+        return [vector.tolist() for vector in self._model.embed(crops)]
 
 
 class DinoV2Embedder(Embedder):

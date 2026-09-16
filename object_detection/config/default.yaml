@@ -46,3 +46,35 @@ inference:
   # object. Re-check on a test split once one exists. The API reads this at
   # startup, so restart the server after changing it.
   conf: 0.5
+
+# Stage 2: which object each detection is, by embedding its crop and
+# searching the reference index.
+identification:
+  # How each detection is cut out before embedding. Reference crops and
+  # query crops must use the SAME values, or their vectors stop being
+  # comparable — rebuild the index after changing either of these.
+  crop_padding: 0.1     # extra context per side, as a fraction of the box
+  min_crop_size: 16     # boxes smaller than this (pixels) are not identified
+
+  # Which embedder turns crops into vectors: "fastembed" or "dinov2".
+  embedder: fastembed
+  # For fastembed, one of its image models (Unicom is built for image
+  # retrieval; clip-ViT-B-32-vision and resnet50-onnx are the alternatives).
+  # For dinov2, a Hugging Face name such as facebook/dinov2-base.
+  # Vectors from different models are NOT comparable: changing this means
+  # rebuilding the index.
+  model: Qdrant/Unicom-ViT-B-16
+
+  # Where the vector index lives. A folder (resolved against the repo root)
+  # uses Qdrant's local mode: no server, but only one process at a time.
+  # Switch to a URL like http://localhost:6333 for a Qdrant server in Docker
+  # when several processes need the index (API workers, or an admin tool
+  # writing while the API reads). Nothing else changes.
+  qdrant_location: qdrant_data
+  collection: reference_objects
+
+  # Minimum similarity (0-1) for a match to be accepted. Below it, the item
+  # is reported as unknown rather than named as the closest reference.
+  # PROVISIONAL: this has to be chosen by measurement, like `conf`, and the
+  # right value differs per embedding model.
+  unknown_threshold: 0.5
