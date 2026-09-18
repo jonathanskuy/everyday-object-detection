@@ -64,6 +64,11 @@ identification:
   # Vectors from different models are NOT comparable: changing this means
   # rebuilding the index.
   model: Qdrant/Unicom-ViT-B-16
+  # Input size in pixels for the dinov2 embedder (must be a multiple of 14).
+  # Larger keeps more detail — a padded crop of a long object leaves it small
+  # in the square — but is slower. Ignored by fastembed, whose models each
+  # have their own fixed input size.
+  image_size: 224
 
   # Where the vector index lives. A folder (resolved against the repo root)
   # uses Qdrant's local mode: no server, but only one process at a time.

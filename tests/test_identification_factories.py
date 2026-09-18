@@ -30,10 +30,26 @@ def test_fastembed_is_built_with_the_configured_model(monkeypatch):
     assert embedder.model_name == config.model
 
 
-def test_dinov2_says_it_is_not_implemented_yet():
-    config = replace(load_config().identification, embedder="dinov2")
-    with pytest.raises(NotImplementedError):
-        create_embedder(config)
+class FakeDinoV2Embedder:
+    """Stands in for DinoV2Embedder so no model is downloaded in tests."""
+
+    def __init__(self, model_name: str, image_size: int):
+        self.model_name = model_name
+        self.image_size = image_size
+
+    name = "fake/dinov2"
+    dimension = 4
+
+
+def test_dinov2_is_built_with_the_configured_model_and_image_size(monkeypatch):
+    monkeypatch.setattr(embedders_module, "DinoV2Embedder", FakeDinoV2Embedder)
+    config = replace(load_config().identification, embedder="dinov2", model="facebook/dinov2-base")
+
+    embedder = create_embedder(config)
+
+    assert isinstance(embedder, FakeDinoV2Embedder)
+    assert embedder.model_name == "facebook/dinov2-base"
+    assert embedder.image_size == config.image_size
 
 
 def test_an_unknown_embedder_name_is_rejected():

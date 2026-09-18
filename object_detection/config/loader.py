@@ -58,6 +58,7 @@ class IdentificationConfig:
     min_crop_size: int
     embedder: str
     model: str
+    image_size: int
     # A folder for Qdrant's local mode, or a server URL. Kept as a string
     # because it can be either; see _resolve_location.
     qdrant_location: str
