@@ -181,6 +181,10 @@ The notebooks run in order, and each builds on the previous one:
    the config) and inspects predictions.
 3. **`02_evaluation`**: measures the trained detector and chooses the
    confidence threshold.
+4. **`scripts/build_reference_index.py`**: fills the reference index from the
+   per-class export (see below).
+5. **`03_identification_evaluation`**: measures identification end to end and
+   chooses the unknown threshold.
 
 Outputs go to `runs/<name>/`, where the name is `train.name` in the config.
 Before retraining, give the experiment a new `train.name` (Ultralytics never
@@ -190,8 +194,12 @@ which names its output `<name>-val` after the run it evaluates.
 
 ## Results
 
-Baseline detector, evaluated in `notebooks/02_evaluation.ipynb` on the
-validation split:
+All numbers below come from the validation split, through the same code the
+API runs.
+
+### Detection
+
+Baseline detector, evaluated in `notebooks/02_evaluation.ipynb`:
 
 | Metric | Value |
 |---|---|
@@ -206,13 +214,66 @@ dropped. Missed objects are treated as the more costly error, since Stage 2
 can reject a false box but can never recover a missed object. The full
 reasoning is in the notebook.
 
-**Caveats:** there is no separate test split yet. The validation set was used
-both to select the best training epoch and to choose the threshold, so these
-numbers are optimistic, and the validation set is small.
+At that threshold the detector finds 41 of the 45 labelled objects and draws
+5 boxes that are not objects.
 
-**Known weaknesses**, which point to data rather than settings:
+### Identification
+
+Evaluated in `notebooks/03_identification_evaluation.ipynb`, against an index
+built from the train split's crops:
+
+| Metric | Value |
+|---|---|
+| Top-1 accuracy, on detected objects | 40/41 |
+| Unknown objects rejected at threshold 0.5 | 5/7 |
+| Known objects lost at threshold 0.5 | 0/41 |
+
+`unknown_threshold` is set to **0.5**. Above it an object is named, below it
+the detection is returned with null identification fields. It was chosen by
+holding one object out of the index entirely, so its crops stand in for an
+object that has never been registered: at 0.5 most of those are rejected
+while no known object is lost. Raising it to 0.6 rejects all of them, but
+costs three correct names.
+
+The single identification error is a bag with headphones lying on it: the
+crop contains both objects, and the headphones dominate it.
+
+### Choice of embedding model
+
+`scripts/compare_embedders.py` measures candidates the same way, holding each
+class out in turn (45 unknown and 315 known crops in total):
+
+| Embedder | Dim | Top-1 | AUC | Unknown rejected |
+|---|---|---|---|---|
+| **Qdrant/Unicom-ViT-B-16** (in use) | 768 | 0.98 | 0.983 | 41/45 |
+| Qdrant/clip-ViT-B-32-vision | 512 | 0.98 | 0.964 | 17/45 |
+| Qdrant/resnet50-onnx | 2048 | 1.00 | 0.986 | 36/45 |
+| facebook/dinov2-small@224 | 384 | 0.96 | 0.990 | 38/45 |
+| facebook/dinov2-base@224 | 768 | 0.96 | 0.991 | 37/45 |
+
+AUC is how often a known crop outscores an unknown one, over every pair; it
+is reported alongside the counts because a count can be decided by a single
+extreme crop. CLIP is clearly weakest at recognising that an object is not in
+the index, which fits a model trained to match captions rather than
+individual objects. The rest are within one or two crops of each other, so
+Unicom is kept and the comparison should be repeated on a larger dataset.
+
+### Caveats
+
+- **No separate test split yet.** The validation set selected the training
+  epoch and both thresholds, so these numbers are optimistic.
+- **The validation set is small**: one crop is worth about 2 percentage
+  points.
+- **Each class is a single physical item**, so identification here means
+  recognising a type. Telling apart several similar items of the same type is
+  harder and untested.
+
+### Known weaknesses
+
+These point to data rather than settings:
 - **Overlapping objects** get merged into one box spanning several objects,
-  causing both false boxes and misses.
+  causing false boxes, misses and wrong counts — and, when two objects share
+  a crop, wrong identification too.
 - **Unusual poses**, such as a bag leaning against a wall, get low confidence.
 - **Labelling consistency** needs a rule, e.g. whether straps belong inside
   the box, and whether everyday objects outside the 8 types are labelled too.
@@ -234,6 +295,23 @@ model is downloaded on first use.
 The index lives where `identification.qdrant_location` points. A folder means
 Qdrant's local mode, which **one process at a time** can open: stop the API
 before rebuilding the index, or move Qdrant to a server (see the config).
+
+## Comparing embedding models
+
+The embedding model decides how well objects are told apart, and whether an
+unregistered object can be recognised as unknown. To compare candidates on
+the current dataset:
+
+```bash
+python scripts/compare_embedders.py --held-out all
+python scripts/compare_embedders.py --model dinov2:facebook/dinov2-base:518
+```
+
+Each candidate is measured on the same crops: identification accuracy against
+an index of everything, then separation against an index with one object left
+out. Temporary indexes are used, so the project's own index is untouched.
+Models are downloaded on first use, and `--held-out all` repeats the test for
+every class, which takes a while but stops one object deciding the result.
 
 ## Running the API
 
