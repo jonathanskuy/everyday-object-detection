@@ -15,8 +15,12 @@ error.
 """
 
 import math
+from collections.abc import Iterator
+from pathlib import Path
 
 from PIL import Image
+
+from object_detection.utils.labels import load_labelled_boxes
 
 # Fill colour for the borders added when padding a crop to a square. A neutral
 # mid-grey (the same one Ultralytics uses when letterboxing) is less likely to
@@ -89,3 +93,27 @@ def crop_detection(
     square = Image.new("RGB", (side, side), PAD_COLOUR)
     square.paste(region, ((side - width) // 2, (side - height) // 2))
     return square
+
+
+def iter_labelled_crops(
+    img_paths: list[Path],
+    class_names: dict[int, str],
+    padding: float,
+    min_size: int,
+) -> Iterator[tuple[str, Image.Image]]:
+    """Yield (object name, crop) for every labelled box in `img_paths`.
+
+    Used both to build the reference index and to evaluate it, so references
+    and evaluation crops are always produced the same way.
+
+    Yields one crop at a time instead of returning a list: a dataset of tens
+    of thousands of images would not fit in memory all at once. Boxes too
+    small to crop are skipped, and background images yield nothing, which is
+    correct here — they contain no object to reference.
+    """
+    for img_path in img_paths:
+        with Image.open(img_path) as image:
+            for class_id, bbox in load_labelled_boxes(img_path):
+                crop = crop_detection(image, bbox, padding=padding, min_size=min_size)
+                if crop is not None:
+                    yield class_names[class_id], crop

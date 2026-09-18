@@ -26,28 +26,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from PIL import Image
 from ultralytics.data.utils import check_det_dataset
 
 from object_detection.config.loader import load_config
-from object_detection.identification.cropping import crop_detection
+from object_detection.identification.cropping import iter_labelled_crops
 from object_detection.identification.index import create_index
-from object_detection.utils.labels import load_labelled_boxes
-
-
-def crops_by_class(img_path: Path, padding: float, min_size: int) -> dict[int, list[Image.Image]]:
-    """Return one image's reference crops, grouped by their label's class id.
-
-    Boxes too small to crop are skipped; background images (no labels) yield
-    nothing, which is correct here: they contain no object to reference.
-    """
-    crops: dict[int, list[Image.Image]] = {}
-    with Image.open(img_path) as image:
-        for class_id, bbox in load_labelled_boxes(img_path):
-            crop = crop_detection(image, bbox, padding=padding, min_size=min_size)
-            if crop is not None:
-                crops.setdefault(class_id, []).append(crop)
-    return crops
 
 
 def main() -> int:
@@ -94,15 +77,13 @@ def main() -> int:
             print(f"Reset:      removed existing references for {len(class_names)} classes")
 
         stored = Counter()
-        for img_path in img_paths:
-            for class_id, crops in crops_by_class(
-                img_path, identification.crop_padding, identification.min_crop_size
-            ).items():
-                name = class_names[class_id]
-                # One call per class per image keeps memory flat: crops are
-                # embedded and stored as they are made, not all at the end.
-                index.add_references(crops, object_id=name, object_name=name)
-                stored[name] += len(crops)
+        # Crops are embedded and stored one at a time, as they are produced,
+        # so memory stays flat however large the dataset is.
+        for name, crop in iter_labelled_crops(
+            img_paths, class_names, identification.crop_padding, identification.min_crop_size
+        ):
+            index.add_references([crop], object_id=name, object_name=name)
+            stored[name] += 1
     finally:
         # Local mode locks its folder; without this, nothing else can open
         # the index until this process exits.
