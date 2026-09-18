@@ -3,6 +3,7 @@ CLAUDE.md
 # --- Datasets ---------------------------------------------------------------
 # Leading "/" anchors to the repo root. Covers raw_export/ and collapsed/.
 /datasets/
+/test_images/
 
 # --- Model weights and exports ----------------------------------------------
 # No leading "/", so these match at any depth: Ultralytics downloads

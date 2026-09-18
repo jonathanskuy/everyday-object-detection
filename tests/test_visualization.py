@@ -1,9 +1,15 @@
-"""Tests for draw_detections."""
+"""Tests for drawing detections and identifications."""
 
 from PIL import Image
 
 from object_detection.detection.inference import Detection
-from object_detection.utils.visualization import draw_detections
+from object_detection.identification.identify import Identification
+from object_detection.utils.visualization import (
+    IDENTIFIED_COLOUR,
+    UNKNOWN_COLOUR,
+    draw_detections,
+    draw_identifications,
+)
 
 DETECTIONS = [
     Detection(bbox=(20, 30, 120, 90), confidence=0.91),
@@ -35,3 +41,49 @@ def test_accepts_non_rgb_images():
 def test_no_detections_gives_an_unchanged_copy():
     image = Image.new("RGB", (200, 150), "white")
     assert draw_detections(image, []).tobytes() == image.tobytes()
+
+
+IDENTIFIED = Identification(
+    detection=Detection(bbox=(20, 30, 120, 90), confidence=0.91),
+    object_id="watch",
+    object_name="watch",
+    match_score=0.84,
+)
+UNKNOWN = Identification(
+    detection=Detection(bbox=(130, 30, 190, 90), confidence=0.6),
+    object_id=None,
+    object_name=None,
+    match_score=None,
+)
+
+
+def colours_used(annotated):
+    return {colour for _, colour in annotated.getcolors(maxcolors=100000)}
+
+
+def test_identified_objects_are_drawn_in_the_identified_colour():
+    annotated = draw_identifications(Image.new("RGB", (300, 200), "white"), [IDENTIFIED])
+
+    assert IDENTIFIED_COLOUR in colours_used(annotated)
+    assert UNKNOWN_COLOUR not in colours_used(annotated)
+
+
+def test_unidentified_detections_are_still_drawn_in_the_unknown_colour():
+    # They are objects, and still counted; they just have no name.
+    annotated = draw_identifications(Image.new("RGB", (300, 200), "white"), [UNKNOWN])
+
+    assert UNKNOWN_COLOUR in colours_used(annotated)
+    assert IDENTIFIED_COLOUR not in colours_used(annotated)
+
+
+def test_both_kinds_can_appear_in_one_image():
+    annotated = draw_identifications(Image.new("RGB", (300, 200), "white"), [IDENTIFIED, UNKNOWN])
+
+    assert {IDENTIFIED_COLOUR, UNKNOWN_COLOUR} <= colours_used(annotated)
+
+
+def test_drawing_identifications_leaves_the_input_image_untouched():
+    image = Image.new("RGB", (300, 200), "white")
+    before = image.tobytes()
+    draw_identifications(image, [IDENTIFIED, UNKNOWN])
+    assert image.tobytes() == before

@@ -17,10 +17,8 @@ Status: FastEmbedEmbedder is implemented; DinoV2Embedder is still a stub.
 
 from abc import ABC, abstractmethod
 
-import torch
 from fastembed import ImageEmbedding
 from PIL import Image
-from transformers import AutoImageProcessor, AutoModel
 
 from object_detection.config.loader import IdentificationConfig
 
@@ -123,6 +121,12 @@ class DinoV2Embedder(Embedder):
 
     def __init__(self, model_name: str, image_size: int):
         """Load `model_name` (e.g. "facebook/dinov2-base") for inputs of `image_size` pixels."""
+        # Imported here, not at the top of the file: transformers takes
+        # several seconds to import, and everything that touches the index
+        # (the API, notebooks, the drawing helpers) would pay that cost even
+        # when another embedder is configured.
+        from transformers import AutoImageProcessor, AutoModel
+
         self._model_name = model_name
         self._image_size = image_size
         self._processor = AutoImageProcessor.from_pretrained(
@@ -130,6 +134,8 @@ class DinoV2Embedder(Embedder):
             size={"height": image_size, "width": image_size},
             do_center_crop=False,
         )
+        import torch
+
         self._model = AutoModel.from_pretrained(model_name)
         # eval() turns off training-only behaviour (dropout and such); the
         # model is used frozen, never trained.
@@ -152,6 +158,8 @@ class DinoV2Embedder(Embedder):
         return self._dimension
 
     def embed(self, crops: list[Image.Image]) -> list[list[float]]:
+        import torch
+
         # inference_mode() skips the bookkeeping PyTorch does for training,
         # which is faster and uses less memory.
         with torch.inference_mode():
