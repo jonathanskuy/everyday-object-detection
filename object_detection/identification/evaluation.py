@@ -73,6 +73,37 @@ def best_scores(index: ReferenceIndex, labelled_crops, held_out: str) -> tuple[l
     return unknown_scores, known_scores
 
 
+def separation_pairs(unknown_scores: list[float], known_scores: list[float]) -> tuple[float, int]:
+    """Return (wins, pairs): over every (known, unknown) pair, how often the known crop scores higher.
+
+    Ties count as half a win, the usual convention.
+
+    Unlike SeparationCounts, this looks at every pair rather than at the
+    extremes, so a single odd crop moves it only by its share of the pairs.
+    One contaminated reference crop was enough to halve the "known kept"
+    count while barely changing this.
+
+    Returned as (wins, pairs) rather than a ratio so results from several
+    held-out objects can be added up before dividing.
+    """
+    wins = 0.0
+    for known in known_scores:
+        for unknown in unknown_scores:
+            if known > unknown:
+                wins += 1
+            elif known == unknown:
+                wins += 0.5
+    return wins, len(known_scores) * len(unknown_scores)
+
+
+def separation_auc(unknown_scores: list[float], known_scores: list[float]) -> float:
+    """The share of (known, unknown) pairs the known crop wins: 1.0 is perfect, 0.5 is chance."""
+    wins, pairs = separation_pairs(unknown_scores, known_scores)
+    if not pairs:
+        raise ValueError("both unknown and known scores are needed to measure separation")
+    return wins / pairs
+
+
 def separation(unknown_scores: list[float], known_scores: list[float]) -> SeparationCounts:
     """Count how cleanly the two sets of scores can be separated by a threshold."""
     if not unknown_scores or not known_scores:

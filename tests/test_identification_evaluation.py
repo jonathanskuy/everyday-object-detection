@@ -8,6 +8,8 @@ from object_detection.identification.evaluation import (
     best_scores,
     fill_index,
     separation,
+    separation_auc,
+    separation_pairs,
     top1_accuracy,
 )
 from object_detection.identification.index import Match, ReferenceIndex
@@ -71,6 +73,43 @@ def test_separation_counts_an_overlap():
     assert counts.unknown_rejected == 1
     # Rejecting both unknown crops (threshold above 0.75) keeps only 0.9.
     assert counts.known_kept == 1
+
+
+def test_auc_is_one_when_every_known_crop_outscores_every_unknown_one():
+    assert separation_auc(unknown_scores=[0.2, 0.3], known_scores=[0.7, 0.8]) == 1.0
+
+
+def test_auc_is_a_half_when_the_scores_are_interleaved():
+    # Pairs: 0.3 loses twice, 0.7 wins twice -> 2 of 4.
+    assert separation_auc(unknown_scores=[0.4, 0.6], known_scores=[0.3, 0.7]) == 0.5
+
+
+def test_auc_below_a_half_means_unknown_crops_score_higher():
+    assert separation_auc(unknown_scores=[0.4, 0.8], known_scores=[0.2, 0.6]) == 0.25
+
+
+def test_auc_counts_ties_as_half():
+    assert separation_auc(unknown_scores=[0.5], known_scores=[0.5]) == 0.5
+
+
+def test_auc_barely_moves_for_one_odd_crop_while_the_counts_collapse():
+    known = [0.6, 0.7, 0.8, 0.9]
+    clean = [0.1, 0.2, 0.3]
+    contaminated = [0.1, 0.2, 0.95]      # one unknown crop scoring above every known one
+
+    # The counts lose everything: no threshold both rejects 0.95 and keeps any known crop.
+    assert separation(clean, known).known_kept == 4
+    assert separation(contaminated, known).known_kept == 0
+    # The AUC drops only by that crop's share of the pairs.
+    assert separation_auc(clean, known) == 1.0
+    assert separation_auc(contaminated, known) == pytest.approx(8 / 12)
+
+
+def test_separation_pairs_returns_wins_and_pair_count_for_adding_up():
+    wins, pairs = separation_pairs(unknown_scores=[0.2, 0.9], known_scores=[0.5, 0.6, 0.7])
+
+    assert pairs == 6          # 3 known x 2 unknown
+    assert wins == 3           # every known beats 0.2, none beats 0.9
 
 
 def test_separation_needs_both_sides():
