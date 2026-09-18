@@ -9,6 +9,7 @@ import pytest
 from PIL import Image
 
 from object_detection.detection.evaluation import (
+    count_summary,
     iou,
     load_true_boxes,
     match_detections,
@@ -116,6 +117,50 @@ def test_no_detections_means_every_true_box_is_missed():
 def test_on_a_background_image_every_detection_is_false():
     detection = Detection(bbox=(0, 0, 10, 10), confidence=0.9)
     assert match_detections([detection], []) == ([], [detection], [])
+
+
+# --- counting ------------------------------------------------------------------
+
+def test_counting_is_perfect_when_every_image_matches():
+    summary = count_summary([(3, 3), (0, 0), (5, 5)])
+
+    assert (summary.images, summary.exact) == (3, 3)
+    assert summary.exact_share == 1.0
+    assert summary.mean_absolute_error == 0.0
+    assert summary.net_error == 0
+
+
+def test_counting_separates_over_and_under_counting():
+    # +2 on the first image, -1 on the second, exact on the third.
+    summary = count_summary([(5, 3), (2, 3), (4, 4)])
+
+    assert (summary.overcounted, summary.undercounted) == (2, 1)
+    assert summary.exact == 1
+    assert summary.mean_absolute_error == pytest.approx(1.0)   # (2 + 1) / 3
+    assert summary.net_error == 1
+
+
+def test_errors_in_opposite_directions_cancel_in_the_net_but_not_in_the_average():
+    # The point of reporting both: the net says "perfect", the average doesn't.
+    summary = count_summary([(6, 3), (0, 3)])
+
+    assert summary.net_error == 0
+    assert summary.mean_absolute_error == pytest.approx(3.0)
+    assert summary.exact == 0
+
+
+def test_a_box_on_an_empty_image_is_an_overcount():
+    summary = count_summary([(1, 0)])
+
+    assert (summary.overcounted, summary.undercounted) == (1, 0)
+    assert summary.exact == 0
+
+
+def test_counting_nothing_is_not_a_division_by_zero():
+    summary = count_summary([])
+
+    assert summary.exact_share == 0.0
+    assert summary.mean_absolute_error == 0.0
 
 
 def test_pairing_says_which_true_box_each_detection_found():

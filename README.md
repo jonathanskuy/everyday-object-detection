@@ -196,6 +196,19 @@ The notebooks run in order, and each builds on the previous one:
 5. **`03_identification_evaluation`**: measures identification end to end and
    chooses the unknown threshold.
 
+The baseline detector was trained with **ultralytics 8.4.146**. Checkpoints
+trained with a newer version may not load in an older one, so note the
+version whenever a model is trained elsewhere, e.g. on Colab.
+
+If a long training run is interrupted (a Colab session dropping, say),
+continue it from the run's `last.pt`:
+
+```python
+train(load_config(), resume=True)
+```
+
+Its settings come from the interrupted run itself, not from the config.
+
 Outputs go to `runs/<name>/`, where the name is `train.name` in the config.
 Before retraining, give the experiment a new `train.name` (Ultralytics never
 overwrites a run; reusing a name produces `<name>-2`). Afterwards, point

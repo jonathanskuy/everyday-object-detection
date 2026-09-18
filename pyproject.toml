@@ -14,7 +14,10 @@ requires-python = ">=3.10"
 # Install a CUDA build of torch *before* this (see README) — ultralytics
 # depends on torch, and pip's default torch wheel on Windows is CPU-only.
 dependencies = [
-    "ultralytics>=8.3",
+    # 8.4 is the release that ships the YOLO26 models the detector uses.
+    # Checkpoints trained with a newer Ultralytics may not load in an older
+    # one, so note the exact version a model was trained with (README).
+    "ultralytics>=8.4",
     "fastapi",
     "uvicorn",
     "python-multipart",  # FastAPI needs it to parse file uploads

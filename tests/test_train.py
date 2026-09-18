@@ -3,6 +3,8 @@
 Training itself is never run here; a stand-in YOLO records the arguments.
 """
 
+import pytest
+
 import object_detection.detection.train as train_module
 from object_detection.config.loader import PROJECT_ROOT, load_config
 
@@ -38,3 +40,27 @@ def test_train_passes_config_values_to_ultralytics(monkeypatch):
         "project": str(PROJECT_ROOT / "runs"),
         "name": cfg.train.name,
     }
+
+
+def test_resuming_continues_from_the_runs_last_checkpoint(monkeypatch, tmp_path):
+    monkeypatch.setattr(train_module, "YOLO", RecordingYOLO)
+    monkeypatch.setattr(train_module, "PROJECT_ROOT", tmp_path)
+    cfg = load_config()
+    last = tmp_path / "runs" / cfg.train.name / "weights" / "last.pt"
+    last.parent.mkdir(parents=True)
+    last.touch()
+
+    train_module.train(cfg, resume=True)
+
+    model = RecordingYOLO.last
+    assert model.weights == last
+    # Only resume=True: the settings come from the interrupted run itself.
+    assert model.train_kwargs == {"resume": True}
+
+
+def test_resuming_without_a_checkpoint_says_so(monkeypatch, tmp_path):
+    monkeypatch.setattr(train_module, "YOLO", RecordingYOLO)
+    monkeypatch.setattr(train_module, "PROJECT_ROOT", tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="cannot resume"):
+        train_module.train(load_config(), resume=True)

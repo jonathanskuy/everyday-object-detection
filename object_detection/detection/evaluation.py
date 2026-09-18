@@ -12,6 +12,8 @@ a package module can't see. load_true_boxes now uses YOLO's folder convention
 instead (see its docstring), which gives the same paths for the dataset.
 """
 
+from dataclasses import dataclass
+
 from object_detection.utils.labels import load_labelled_boxes
 
 # A prediction counts as finding a labelled object when their IoU is at least
@@ -50,6 +52,66 @@ def iou(box_a, box_b):
     if union_area == 0:
         return 0.0
     return overlap_area / union_area
+
+
+@dataclass(frozen=True)
+class CountSummary:
+    """How well the number of detections matches the number of labelled objects.
+
+    The count of products in an image is simply how many detections it has,
+    so counting is decided by the detector alone: identification never adds
+    or removes one.
+
+    WARNING: a correct count does not mean correct detections. A false box
+    and a missed object in the same image cancel out, so an image with two
+    mistakes can still count perfectly. Always report this beside precision
+    and recall, never instead of them.
+    """
+
+    images: int
+    exact: int          # images whose count is exactly right
+    overcounted: int    # detections too many, summed over images
+    undercounted: int   # objects missed in the count, summed over images
+
+    @property
+    def exact_share(self) -> float:
+        """Share of images counted exactly right, from 0 to 1."""
+        return self.exact / self.images if self.images else 0.0
+
+    @property
+    def mean_absolute_error(self) -> float:
+        """Average size of the per-image count error, ignoring its direction."""
+        return (self.overcounted + self.undercounted) / self.images if self.images else 0.0
+
+    @property
+    def net_error(self) -> int:
+        """Total signed error: positive means the system counts too many overall.
+
+        Near zero does not mean accurate: an image counting +3 and another
+        counting -3 cancel out. Compare it with mean_absolute_error to see
+        whether errors mostly lean one way.
+        """
+        return self.overcounted - self.undercounted
+
+
+def count_summary(counted_and_true) -> CountSummary:
+    """Summarise counting over a dataset.
+
+    `counted_and_true` is an iterable of (detections in the image, labelled
+    objects in the image) pairs, one per image — including images with no
+    objects, where drawing any box is an overcount.
+    """
+    images = exact = overcounted = undercounted = 0
+    for counted, true_count in counted_and_true:
+        images += 1
+        error = counted - true_count
+        if error == 0:
+            exact += 1
+        elif error > 0:
+            overcounted += error
+        else:
+            undercounted += -error
+    return CountSummary(images, exact, overcounted, undercounted)
 
 
 def pair_detections_with_boxes(detections, true_boxes):
