@@ -157,8 +157,8 @@ classes.
 
 A Roboflow export in YOLOv8 format (`train/`, `valid/`, `data.yaml`) with 8
 object classes. For detection, the classes are collapsed into a single
-`object` class in a separate copy (`notebooks/00_data_preparation.ipynb`); the
-original export is kept untouched, because its per-class labels will seed the
+`object` class in a separate copy (`scripts/collapse_dataset.py`); the
+original export is kept untouched, because its per-class labels seed the
 Stage 2 reference index.
 
 Images with no annotations are deliberate background negatives: they teach
@@ -175,8 +175,18 @@ python scripts/check_dataset.py datasets/collapsed/data.yaml
 
 The notebooks run in order, and each builds on the previous one:
 
-1. **`00_data_preparation`**: collapses the 8-class export into the
-   single-class detection dataset.
+1. **`scripts/collapse_dataset.py`**: copies the export into the single-class
+   dataset the detector trains on (`notebooks/00_data_preparation.ipynb`
+   inspects the export around it).
+
+   ```bash
+   python scripts/collapse_dataset.py               # build it
+   python scripts/collapse_dataset.py --overwrite   # rebuild from scratch
+   ```
+
+   Splits and classes come from the export's own `data.yaml`, so a test split
+   is collapsed too, and the copy's `data.yaml` holds no absolute path: it
+   works on another machine, e.g. in Colab.
 2. **`01_training`**: fine-tunes the pretrained YOLO checkpoint (settings from
    the config) and inspects predictions.
 3. **`02_evaluation`**: measures the trained detector and chooses the
