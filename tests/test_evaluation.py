@@ -8,7 +8,12 @@ has a test that would catch it.
 import pytest
 from PIL import Image
 
-from object_detection.detection.evaluation import iou, load_true_boxes, match_detections
+from object_detection.detection.evaluation import (
+    iou,
+    load_true_boxes,
+    match_detections,
+    pair_detections_with_boxes,
+)
 from object_detection.detection.inference import Detection
 
 
@@ -111,6 +116,27 @@ def test_no_detections_means_every_true_box_is_missed():
 def test_on_a_background_image_every_detection_is_false():
     detection = Detection(bbox=(0, 0, 10, 10), confidence=0.9)
     assert match_detections([detection], []) == ([], [detection], [])
+
+
+def test_pairing_says_which_true_box_each_detection_found():
+    first = Detection(bbox=(0, 0, 10, 10), confidence=0.9)
+    second = Detection(bbox=(20, 20, 30, 30), confidence=0.8)
+    other_box = (20, 20, 30, 30)
+
+    pairs, missed = pair_detections_with_boxes([second, first], [TRUE_BOX, other_box])
+
+    # Highest confidence first, each paired with the box it found.
+    assert pairs == [(first, TRUE_BOX), (second, other_box)]
+    assert missed == []
+
+
+def test_pairing_reports_a_false_detection_as_paired_with_nothing():
+    detection = Detection(bbox=(50, 50, 60, 60), confidence=0.9)
+
+    pairs, missed = pair_detections_with_boxes([detection], [TRUE_BOX])
+
+    assert pairs == [(detection, None)]
+    assert missed == [TRUE_BOX]
 
 
 def test_matching_does_not_modify_the_callers_lists():

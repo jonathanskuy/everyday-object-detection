@@ -52,15 +52,24 @@ def iou(box_a, box_b):
     return overlap_area / union_area
 
 
-def match_detections(detections, true_boxes):
-    """Split one image's results into found detections, false detections, and missed true boxes.
+def pair_detections_with_boxes(detections, true_boxes):
+    """Pair each detection with the true box it found, and list the boxes nobody found.
+
+    Returns (pairs, missed):
+      - pairs: one (detection, true_box) per detection, in order of
+        decreasing confidence. true_box is None for a detection that found
+        nothing, i.e. a false detection.
+      - missed: the true boxes no detection claimed.
 
     Matching is one-to-one, and the most confident detection claims first: a
     second box on an already-claimed object counts as a false detection.
+
+    Keeping the pairing (rather than only the counts) lets a caller look up
+    whatever else it knows about a true box — Stage 2 needs its class, to
+    check whether the detection was identified as the right object.
     """
 
-    found = []
-    false_boxes = []
+    pairs = []
     unmatched = list(true_boxes)
 
     for detection in sorted(detections, key=lambda d: d.confidence, reverse=True):
@@ -72,8 +81,21 @@ def match_detections(detections, true_boxes):
                 best_iou = overlap
                 best_box = true_box
         if best_box is not None and best_iou >= IOU_THRESHOLD:
-            found.append(detection)
+            pairs.append((detection, best_box))
             unmatched.remove(best_box)
         else:
-            false_boxes.append(detection)
-    return found, false_boxes, unmatched
+            pairs.append((detection, None))
+    return pairs, unmatched
+
+
+def match_detections(detections, true_boxes):
+    """Split one image's results into found detections, false detections, and missed true boxes.
+
+    A counting-oriented view of pair_detections_with_boxes: a detection that
+    found a box is "found", one that found nothing is a false detection.
+    """
+
+    pairs, missed = pair_detections_with_boxes(detections, true_boxes)
+    found = [detection for detection, true_box in pairs if true_box is not None]
+    false_boxes = [detection for detection, true_box in pairs if true_box is None]
+    return found, false_boxes, missed
